@@ -122,12 +122,8 @@ class BudaBot(Bot):
         if len(transactions) > 0:
             last_transaction = transactions[-1]
             last_transaction_date = datetime.datetime.strptime(last_transaction['date'], "%b %d %Y %H:%M:%S")
-            last_transaction_date_hour = last_transaction_date.replace(minute=0, second=0, microsecond=0)
-            now_date_hour = datetime.datetime.now().replace(minute=0, second=0, microsecond=0)
-            for i in range(settings.investment['interval_hours']):
-                date_hour_to_check = now_date_hour.replace(hour=(now_date_hour.hour - i) % 24)
-                if last_transaction_date_hour == date_hour_to_check:
-                    return True
+            if self.intervals_without_investing(last_transaction_date) == 0:
+                return True
         return False
 
     def buy_btc(self, amount):
@@ -140,14 +136,20 @@ class BudaBot(Bot):
             return True
         return False
 
+    def intervals_without_investing(self, last_transaction_date):
+        if last_transaction_date == None:
+            return 1
+        now_hour = datetime.datetime.now().hour
+        last_transaction_date_hour = last_transaction_date.replace(minute=0, second=0, microsecond=0)
+        current_interval = now_hour // settings.investment['interval_hours']
+        last_transaction_interval = last_transaction_date_hour.hour // settings.investment['interval_hours']
+        intervals_without_investing = current_interval - last_transaction_interval
+        return intervals_without_investing
+
     def calculate_amount_investment(self, now, last_transaction_date):
         interval_investment = self.daily_investment / 24 * settings.investment['interval_hours']
         if last_transaction_date == None:
             return interval_investment
-        now_ts = time.mktime(now.timetuple())
-        last_transaction_ts = time.mktime(last_transaction_date.timetuple())
-        intervals_without_investing = int((now_ts - last_transaction_ts) / 3600 / settings.investment['interval_hours'])
-        self.log.info(f'Hours without investing: {(now_ts - last_transaction_ts)/ 3600}')
+        intervals_without_investing = self.intervals_without_investing(last_transaction_date)
         self.log.info(f'Intervals without investing: {intervals_without_investing}')
-
-        return interval_investment + (intervals_without_investing - 1) * interval_investment
+        return intervals_without_investing * interval_investment
