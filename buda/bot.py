@@ -141,10 +141,8 @@ class BudaBot(Bot):
             return 1
         now_hour = datetime.datetime.now().hour
         last_transaction_date_hour = last_transaction_date.replace(minute=0, second=0, microsecond=0)
-        current_interval = now_hour // settings.investment['interval_hours']
-        last_transaction_interval = last_transaction_date_hour.hour // settings.investment['interval_hours']
-        intervals_without_investing = current_interval - last_transaction_interval
-        return intervals_without_investing
+        diff_hours = divmod((datetime.datetime.now() - last_transaction_date_hour).total_seconds(), 60)[0] / 60
+        return diff_hours // settings.investment['interval_hours']
 
     def calculate_amount_investment(self, now, last_transaction_date):
         interval_investment = self.daily_investment / 24 * settings.investment['interval_hours']
