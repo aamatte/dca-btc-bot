@@ -87,7 +87,10 @@ class BudaBot(Bot):
         self.log.error(f'Something went wrong with bot!')
 
     def get_usd_clp(self):
-        return requests.get('https://free.currencyconverterapi.com/api/v6/convert?q=USD_CLP&compact=y').json()['USD_CLP']['val']
+        api_key = settings.apis['currencyconverter_key']
+        return requests.get(
+            f'https://free.currencyconverterapi.com/api/v6/convert?q=USD_CLP&compact=y&apiKey={api_key}'
+        ).json()['USD_CLP']['val']
 
     def get_btc_to_buy(self, balance):
         quotation = self.buda_basic.quotation_market('btc-clp', 'bid_given_value', self.amount_investment).json
