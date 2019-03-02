@@ -18,6 +18,8 @@ credentials:
     key: YOUR-KEY-HERE
     secret: YOUR-SECRET-HERE
 
+apis:
+  currencyconverter_key: YOUR currencyconverterapi.com API KEY
 ```
 
 Adjust your settings in `settings.yml`. You have to edit:
