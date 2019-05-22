@@ -41,6 +41,11 @@ class BudaBot(Bot):
         # Currency converter to use
         self.converter = config['currency_converter']
         self.rate = self.get_converter_rate()
+        # Set withdrawal configs
+        self.withdrawal_enabled = config['withdrawal']['enabled']
+        self.withdrawal_address = config['withdrawal']['address']
+        w_amount = str(config['withdrawal']['min_amount'])
+        self.minimum_withdrawal_amount = Money(w_amount, config['withdrawal']['amount_currency'])
 
     def _algorithm(self):
         balance = self.buda.wallets.quote.fetch_balance().free
@@ -76,6 +81,11 @@ class BudaBot(Bot):
         else:
             self.log.info(f'Already transacted')
 
+        if self.withdrawal_enabled:
+            self.log.info(f'Withdrawal enabled to address {self.withdrawal_address}')
+            self.withdraw_to_own_wallet(reference_price)
+        else:
+            self.log.info(f'Withdrawal not enabled')
 
 
     def _abort(self):
@@ -156,6 +166,20 @@ class BudaBot(Bot):
         intervals_without_investing = self.intervals_without_investing(last_tx_date)
         self.log.info(f'Intervals without investing: {intervals_without_investing}')
         return truncate_money(intervals_without_investing * interval_investment)
+
+    def withdraw_to_own_wallet(self, reference_price):
+        if self.minimum_withdrawal_amount.currency == self.market.quote:
+            min_amount = truncate_money(Money(self.minimum_withdrawal_amount.amount / reference_price.amount,
+                                              self.market.base))
+        else:
+            min_amount = truncate_money(self.minimum_withdrawal_amount)
+        assert min_amount.currency == self.market.base, 'Something is wrong with withdrawal currency'
+        balance = self.buda.wallets.base.fetch_balance().free
+        if balance >= min_amount:
+            self.log.info(f'Requesting withdrawals of {balance} to {self.withdrawal_address}')
+            self.buda.wallets.base.request_withdrawal(balance, self.withdrawal_address, substract_fee=True)
+        else:
+            self.log.info(f'Not enough balance: {balance} < {min_amount}')
 
     def get_market_client(self, name, market):
         for client in self.market_clients:
