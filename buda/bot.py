@@ -3,76 +3,72 @@ from trading_bots.bots import Bot
 
 # The settings module contains all values from settings.yml and secrets.yml
 from trading_bots.conf import settings
-
-from trading_api_wrappers import Bitstamp, Buda
-
-from trading_bots.contrib.clients import buda
-from trading_bots.contrib.clients import Market, Side
-
+from trading_bots.contrib.exchanges import buda, bitfinex, bitstamp, kraken
+from trading_bots.contrib.models import Market, Side, Money, TxStatus
+from trading_bots.contrib.converters.open_exchange_rates import OpenExchangeRates
+from trading_bots.utils import truncate_money
 
 import requests
-import datetime
-import json
+from datetime import datetime
 from time import sleep
-import time
+from decimal import Decimal
+
 
 class BudaBot(Bot):
     # The label is a unique identifier you assign to your bot on Trading-Bots
     label = 'buda'
 
+    market_clients = [
+        buda.BudaMarket,
+        bitfinex.BitfinexMarket,
+        bitstamp.BitstampMarket,
+        kraken.KrakenMarket,
+    ]
+
     def _setup(self, config):
-        # Get API_KEY and API_SECRET from credentials
-        credentials = settings.credentials['Buda']
-        key = credentials['key']
-        secret = credentials['secret']
-
-        # Initialize a Buda Auth client
-        self.buda_basic = Buda.Auth(key, secret)
-        self.buda_auth = buda.BudaAuth(key, secret)
-        self.buda_trading = buda.BudaTrading(
-            'btcclp', dry_run=self.dry_run, timeout=self.timeout, logger=self.log, store=self.store)
-        self.buda_wallets = self.buda_trading.wallet_client('CLP')
-        self.bitstamp = Bitstamp.Public()
-
-        self.daily_investment = settings.investment['monthly'] / 30
-        self.transactions = json.loads(self.store.get('transactions') or '[]')
-        now = datetime.datetime.now()
-        last_transaction = self.transactions[-1] if len(self.transactions) > 0 else None
-        last_transaction_date = datetime.datetime.strptime(last_transaction['date'], "%b %d %Y %H:%M:%S") if last_transaction else None
-        self.amount_investment = self.calculate_amount_investment(now, last_transaction_date)
+        # Initialize a Buda.com and reference exchange clients
+        self.market = Market.from_code(config['investment']['market'])
+        self.ref_market = Market.from_code(config['investment']['ref_market'])
+        self.buda = buda.BudaTrading(market=self.market, dry_run=self.dry_run)
+        self.reference = self.get_market_client(config['investment']['ref_exchange'], self.ref_market)
+        # Initialize Algorithm configs
+        self.daily_investment = Money(str(config['investment']['monthly_amount'] / 30), self.market.quote)
+        self.interval_hours = config['investment']['interval_hours']
+        self.transactions = self.store.get(f'transactions_{self.market}'.lower()) or []
+        self.amount_investment = self.calculate_amount_investment()
+        assert self.amount_investment > Money('1', self.market.quote), 'Amount investment too low'
+        self.overprice_limit = config['investment']['overprice_limit']
+        # Currency converter to use
+        self.converter = config['currency_converter']
+        self.rate = self.get_converter_rate()
 
     def _algorithm(self):
-        if self.amount_investment <= 1:
-            self.log.info(f'Amount investment too low')
-            return
+        balance = self.buda.wallets.quote.fetch_balance().free
+        international_price = self.reference.fetch_ticker().last
+        buy_amount = self.get_amount_to_buy()
 
-        balance = self.buda_trading.wallet_client('CLP').get_available()
-        international_price = self.bitstamp.ticker('BTCUSD')['last']
-        btc_change = self.get_btc_to_buy(self.amount_investment)
+        buy_price = truncate_money(Money(self.amount_investment.amount / buy_amount.amount, self.market.quote))
+        reference_price = truncate_money(Money(international_price.amount * self.rate.amount, self.rate.currency))
 
-        usd_clp = self.get_usd_clp()
-        buy_price = int(float(self.amount_investment) / float(btc_change))
-        international_price_clp = int(float(international_price) * float(usd_clp))
+        self.log.info(f'I have {balance}')
+        self.log.info(f'I will invest {self.amount_investment}')
+        self.log.info(f'{self.ref_market.quote}{self.market.quote}: {self.rate}')
+        self.log.info(f'{self.market.base} to buy: {buy_amount}')
 
-        self.log.info(f'I have {balance} CLP')
-        self.log.info(f'I will invest {self.amount_investment} CLP')
-        self.log.info(f'USDCLP: {usd_clp} CLP')
-        self.log.info(f'BTC to buy: {btc_change} BTC')
-
-        # Log the Bitcoin price
-        self.log.info(f'International BTCUSD price: {international_price} USD')
-        self.log.info(f'International BTCLP price: {international_price_clp} CLP')
+        # Log the price
+        self.log.info(f'International {self.ref_market} price: {international_price}')
+        self.log.info(f'International {self.market} price: {reference_price}')
 
         self.log.info(f'---------------------------------------')
-        self.log.info(f'Buy price: {buy_price} CLP')
-        self.log.info(f'Overprice: {(self.get_overprice(buy_price, international_price_clp)):.2%}')
-        self.log.info(f'Should buy? {(self.should_buy(buy_price, international_price_clp, balance))}')
+        self.log.info(f'Buy price: {buy_price}')
+        self.log.info(f'Overprice: {(self.get_overprice(buy_price, reference_price)):.2%}')
+        self.log.info(f'Should buy? {(self.should_buy(buy_price, reference_price, balance))}')
         self.log.info(f'---------------------------------------')
 
         if not self.already_transacted():
-            if self.should_buy(buy_price, international_price_clp, balance):
-                if self.buy_btc(btc_change):
-                    self.store_transaction(buy_price, self.amount_investment, btc_change)
+            if self.should_buy(buy_price, reference_price, balance):
+                if self.send_buy_order(buy_amount):
+                    self.store_transaction(buy_price, self.amount_investment, buy_amount)
                 else:
                     self.log.info(f'Problem with order')
             else:
@@ -86,71 +82,84 @@ class BudaBot(Bot):
         # Abort logic, runs on exception
         self.log.error(f'Something went wrong with bot!')
 
-    def get_usd_clp(self):
-        api_key = settings.apis['currencyconverter_key']
-        return requests.get(
-            f'https://free.currencyconverterapi.com/api/v6/convert?q=USD_CLP&compact=y&apiKey={api_key}'
-        ).json()['USD_CLP']['val']
+    def get_converter_rate(self):
+        # Set currency converter
+        if self.converter == 'OpenExchangeRates':
+            app_id = settings.credentials['OpenExchangeRates']['app_id']
+            converter = OpenExchangeRates(return_decimal=True, client_params=dict(app_id=app_id))
+            return truncate_money(Money(converter.convert(1, self.ref_market.quote, self.market.quote),
+                                        self.market.quote))
+        elif self.converter == 'Currencyconverterapi':
+            api_key = settings.credentials['Currencyconverter']['key']
+            code = f'{self.ref_market.quote}_{self.market.quote}'
+            rate = requests.get(
+                f'https://free.currencyconverterapi.com/api/v6/convert?q={code}&compact=y&apiKey={api_key}'
+            ).json()[code]['val']
+            return truncate_money(Money(rate, self.market.quote))
 
-    def get_btc_to_buy(self, balance):
-        quotation = self.buda_basic.quotation_market('btc-clp', 'bid_given_value', self.amount_investment).json
-        return quotation['base_balance_change'][0]
+    def get_amount_to_buy(self):
+        quotation = self.buda.fetch_order_book().quote(Side.BUY, amount=self.amount_investment)
+        return truncate_money(quotation.base_amount)
 
     def get_overprice(self, buy_price, international_price_clp):
-        return float(buy_price) / float(international_price_clp) - 1
+        return buy_price.amount / international_price_clp.amount - Decimal('1')
 
     def has_enough_balance(self, balance):
         return balance > self.amount_investment
 
     def should_buy(self, buy_price, international_price_clp, balance):
-        if (
-            self.get_overprice(buy_price, international_price_clp) < settings.investment['overprice_limit'] and
-            self.has_enough_balance(balance)
-        ):
+        overprice = self.get_overprice(buy_price, international_price_clp)
+        if overprice < self.overprice_limit and self.has_enough_balance(balance):
             return True
         return False
 
-    def store_transaction(self, buy_price, amount_clp, amount_btc):
-        transactions = json.loads(self.store.get('transactions') or '[]')
-        transactions.append({
-            'date': datetime.datetime.today().strftime("%b %d %Y %H:%M:%S"),
+    def store_transaction(self, buy_price, quote_amount, base_amount):
+        self.transactions.append({
+            'date': datetime.today().strftime("%b %d %Y %H:%M:%S"),
             'buy_price': buy_price,
-            'amount_clp': amount_clp,
-            'amount_btc': amount_btc
+            'quote_amount': quote_amount,
+            'base_amount': base_amount,
         })
-        self.store.set('transactions', json.dumps(transactions))
+        self.store.set(f'transactions_{self.market}'.lower(), self.transactions)
 
     def already_transacted(self):
-        transactions = json.loads(self.store.get('transactions') or '[]')
-        if len(transactions) > 0:
-            last_transaction = transactions[-1]
-            last_transaction_date = datetime.datetime.strptime(last_transaction['date'], "%b %d %Y %H:%M:%S")
+        if len(self.transactions) > 0:
+            last_transaction = self.transactions[-1]
+            last_transaction_date = datetime.strptime(last_transaction['date'], "%b %d %Y %H:%M:%S")
             if self.intervals_without_investing(last_transaction_date) == 0:
                 return True
         return False
 
-    def buy_btc(self, amount):
-        order = self.buda_trading.place_market_order(Side.BUY, amount)
+    def send_buy_order(self, amount):
+        order = self.buda.place_market_order(Side.BUY, amount)
         if order:
             self.log.info(f'Market order placed, waiting for traded state')
-            while order.state != 'traded':
-                order = self.buda_trading.order_details(order.id)
+            while order.status != TxStatus.OK:
+                order = self.buda.fetch_order(order.id)
                 sleep(1)
             return True
         return False
 
     def intervals_without_investing(self, last_transaction_date):
-        if last_transaction_date == None:
+        if last_transaction_date is None:
             return 1
-        now_hour = datetime.datetime.now().hour
         last_transaction_date_hour = last_transaction_date.replace(minute=0, second=0, microsecond=0)
-        diff_hours = divmod((datetime.datetime.now() - last_transaction_date_hour).total_seconds(), 60)[0] / 60
-        return diff_hours // settings.investment['interval_hours']
+        diff_hours = ((datetime.now() - last_transaction_date_hour).total_seconds() // 60) / 60
+        return diff_hours // self.interval_hours
 
-    def calculate_amount_investment(self, now, last_transaction_date):
-        interval_investment = self.daily_investment / 24 * settings.investment['interval_hours']
-        if last_transaction_date == None:
-            return interval_investment
-        intervals_without_investing = self.intervals_without_investing(last_transaction_date)
+    def calculate_amount_investment(self):
+        last_transaction = self.transactions[-1] if len(self.transactions) > 0 else None
+        last_tx_date = datetime.strptime(last_transaction['date'], "%b %d %Y %H:%M:%S") if last_transaction else None
+        interval_investment = self.daily_investment / 24 * self.interval_hours
+        if last_tx_date is None:
+            return truncate_money(interval_investment)
+        intervals_without_investing = self.intervals_without_investing(last_tx_date)
         self.log.info(f'Intervals without investing: {intervals_without_investing}')
-        return intervals_without_investing * interval_investment
+        return truncate_money(intervals_without_investing * interval_investment)
+
+    def get_market_client(self, name, market):
+        for client in self.market_clients:
+            if client.name == name:
+                return client(market, client=None, dry_run=self.dry_run,
+                              timeout=self.timeout, logger=self.log, store=self.store)
+        raise NotImplementedError(f'Client {name} not found!')
