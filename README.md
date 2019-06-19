@@ -60,11 +60,19 @@ You need to have installed `python3.6` and `pipenv`.
 
 ## Deployment
 
-You can run the bot every 2-5 minutes with a cron job. For example:
+You can run the bot every 2-5 minutes with a cron job.
+
+```
+crontab -e
+```
+
+At the end of the file put something like this:
 
 ```
 */2 * * * * cd ~/dca-btc-bot && /usr/local/bin/pipenv run ~/dca-btc-bot/bots.py run buda >> ~/dca-btc-bot/log.log 2>&1
 ```
+
+That will run the bot every 2 minutes.
 
 ## Built With
 
