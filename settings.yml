@@ -26,7 +26,7 @@ investment:
   # Every how many hours the bot tries to buy
   interval_hours: 2
   # Monthly investment
-  monthly: 10000
+  monthly: 200000
   # Max overprice
   overprice_limit: 0.03
 
