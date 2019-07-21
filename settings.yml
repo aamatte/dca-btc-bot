@@ -5,9 +5,7 @@
 
 tag: buda
 
-dry_run: True
-
-installed_bots:
+dry_run: false
 
 logging:
   bots_root: bots
@@ -21,14 +19,6 @@ storage:
   filename: store.json
 
 timeout: 120
-
-investment:
-  # Every how many hours the bot tries to buy
-  interval_hours: 2
-  # Monthly investment
-  monthly: 200000
-  # Max overprice
-  overprice_limit: 0.03
 
 urls:
 

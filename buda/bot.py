@@ -1,15 +1,9 @@
 # Base class that all Bots must inherit from
 from trading_bots.bots import Bot
 
-# The settings module contains all values from settings.yml and secrets.yml
-from trading_bots.conf import settings
-
 from trading_api_wrappers import Bitstamp, Buda
 
-from trading_bots.contrib.clients import buda
-from trading_bots.contrib.clients import Market, Side
-
-
+import os
 import requests
 import datetime
 import json
@@ -21,20 +15,15 @@ class BudaBot(Bot):
     label = 'buda'
 
     def _setup(self, config):
-        # Get API_KEY and API_SECRET from credentials
-        credentials = settings.credentials['Buda']
-        key = credentials['key']
-        secret = credentials['secret']
+        # Get API_KEY and API_SECRET from env vars
+        key = os.environ['BUDA_KEY']
+        secret = os.environ['BUDA_SECRET']
 
         # Initialize a Buda Auth client
         self.buda_basic = Buda.Auth(key, secret)
-        self.buda_auth = buda.BudaAuth(key, secret)
-        self.buda_trading = buda.BudaTrading(
-            'btcclp', dry_run=self.dry_run, timeout=self.timeout, logger=self.log, store=self.store)
-        self.buda_wallets = self.buda_trading.wallet_client('CLP')
         self.bitstamp = Bitstamp.Public()
 
-        self.daily_investment = settings.investment['monthly'] / 30
+        self.daily_investment = int(os.environ['INVESTMENT_MONTHLY_AMOUNT']) / 30
         self.transactions = json.loads(self.store.get('transactions') or '[]')
         now = datetime.datetime.now()
         last_transaction = self.transactions[-1] if len(self.transactions) > 0 else None
@@ -46,7 +35,7 @@ class BudaBot(Bot):
             self.log.info(f'Amount investment too low')
             return
 
-        balance = self.buda_trading.wallet_client('CLP').get_available()
+        balance = self._get_available_amount('CLP')
         international_price = self.bitstamp.ticker('BTCUSD')['last']
         btc_change = self.get_btc_to_buy(self.amount_investment)
 
@@ -87,7 +76,7 @@ class BudaBot(Bot):
         self.log.error(f'Something went wrong with bot!')
 
     def get_usd_clp(self):
-        api_key = settings.apis['currencyconverter_key']
+        api_key = os.environ['CURRENCYCONVERTER_KEY']
         return requests.get(
             f'https://free.currencyconverterapi.com/api/v6/convert?q=USD_CLP&compact=y&apiKey={api_key}'
         ).json()['USD_CLP']['val']
@@ -103,8 +92,9 @@ class BudaBot(Bot):
         return balance > self.amount_investment
 
     def should_buy(self, buy_price, international_price_clp, balance):
+        overprice_limit = float(os.environ['INVESTMENT_OVERPRICE_LIMIT'])
         if (
-            self.get_overprice(buy_price, international_price_clp) < settings.investment['overprice_limit'] and
+            self.get_overprice(buy_price, international_price_clp) < overprice_limit and
             self.has_enough_balance(balance)
         ):
             return True
@@ -130,11 +120,10 @@ class BudaBot(Bot):
         return False
 
     def buy_btc(self, amount):
-        order = self.buda_trading.place_market_order(Side.BUY, amount)
+        order = self.buda_basic.new_order('btc-clp', 'Bid', 'market', amount, None)
         if order:
             self.log.info(f'Market order placed, waiting for traded state')
-            while order.state != 'traded':
-                order = self.buda_trading.order_details(order.id)
+            while self.buda_basic.order_details(order.id).state != 'traded':
                 sleep(1)
             return True
         return False
@@ -145,12 +134,15 @@ class BudaBot(Bot):
         now_hour = datetime.datetime.now().hour
         last_transaction_date_hour = last_transaction_date.replace(minute=0, second=0, microsecond=0)
         diff_hours = divmod((datetime.datetime.now() - last_transaction_date_hour).total_seconds(), 60)[0] / 60
-        return diff_hours // settings.investment['interval_hours']
+        return diff_hours // int(os.environ['INVESTMENT_INTERVAL_HOURS'])
 
     def calculate_amount_investment(self, now, last_transaction_date):
-        interval_investment = self.daily_investment / 24 * settings.investment['interval_hours']
+        interval_investment = self.daily_investment / 24 * int(os.environ['INVESTMENT_INTERVAL_HOURS'])
         if last_transaction_date == None:
             return interval_investment
         intervals_without_investing = self.intervals_without_investing(last_transaction_date)
         self.log.info(f'Intervals without investing: {intervals_without_investing}')
         return intervals_without_investing * interval_investment
+
+    def _get_available_amount(self, currency):
+        return self.buda_basic.balance(currency).available_amount.amount
