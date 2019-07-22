@@ -1,13 +1,17 @@
-FROM python:3.6
+FROM python:3.7
 
 WORKDIR /usr/src/app/dca-btc-bot
 
-RUN git clone https://github.com/aamatte/dca-btc-bot.git .
+COPY Pipfile* ./
 
 RUN pip install pipenv
 RUN pipenv install
 
-COPY settings.yml .
-COPY secrets.yml .
+COPY bots.py .
+COPY ./buda ./buda
+COPY *.yml ./
+COPY run.sh .
 
-CMD [ "pipenv", "run", "./bots.py", "loop", "buda", "--interval", "5"]
+ENV PIPENV_DONT_LOAD_ENV 1
+
+CMD ["./run.sh"]

@@ -1,0 +1,7 @@
+version: '3'
+services:
+  bot:
+    env_file: .env
+    build: .
+    volumes:
+      - ${PWD}/store.json:/usr/src/app/dca-btc-bot/store.json
