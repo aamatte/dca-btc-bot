@@ -4,75 +4,51 @@ Simple bot that buys bitcoin in [Buda.com](https://www.buda.com/chile) following
 
 ## Getting Started
 
-To get the bot working, first, you need to clone the repo.
+To get the bot working, first, you need to clone this repo.
 
 ```
 git clone https://github.com/aamatte/dca-btc-bot.git
 ```
 
-Create a `secrets.yml` file.
+Edit the `.env` file with desired configuration. For example
 
 ```
-credentials:
-  Buda:
-    key: YOUR-KEY-HERE
-    secret: YOUR-SECRET-HERE
+# BUDA API
+BUDA_KEY=MyBudaKey
+BUDA_SECRET=MyBudaSecret
 
-apis:
-  currencyconverter_key: YOUR currencyconverterapi.com API KEY
+# CURRENCYCONVERTER API
+CURRENCYCONVERTER_KEY=MyCurrencyConverterKey
+
+# BOT SETTINGS
+INVESTMENT_INTERVAL_HOURS=2
+INVESTMENT_MONTHLY_AMOUNT=50000
+INVESTMENT_OVERPRICE_LIMIT=0.03
+
 ```
 
-Adjust your settings in `settings.yml`. You have to edit:
-
-```
-...
-
-investment:
-  # Every how many hours the bot tries to buy
-  interval_hours: 2 # Every 2 hours
-
-  # Monthly investment
-  monthly: 10000 # 10,000 CLP every month
-
-  # Max overprice
-  overprice_limit: 0.03 # 3% max overprice
-
-...
-```
-
-Finally, if you want to run the bot.
+Then you can install dependencies and run the bot:
 
 ```
 pipenv install
 pipenv shell
-python bots.py run buda
+./run.sh
 ```
 
-That will run the bot in `dry_run` mode (it won't place any order). Once you are sure everything is correct, in `settings.yml` set:
+Or run it inside a docker container
 
 ```
-dry_run: False
+docker-compose up -d
 ```
+
 
 ### Prerequisites
 
-You need to have installed `python3.6` and `pipenv`.
+You need to have installed `python3.7` and `pipenv`. Or `docker`.
 
 ## Deployment
 
-You can run the bot every 2-5 minutes with a cron job.
-
-```
-crontab -e
-```
-
-At the end of the file put something like this:
-
-```
-*/2 * * * * cd ~/dca-btc-bot && /usr/local/bin/pipenv run ~/dca-btc-bot/bots.py run buda >> ~/dca-btc-bot/log.log 2>&1
-```
-
-That will run the bot every 2 minutes.
+Using the docker container and configuring it via env vars is the recommended way to run this.
 
 ## Built With
 
