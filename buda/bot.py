@@ -4,7 +4,7 @@ from trading_bots.bots import Bot
 # The settings module contains all values from settings.yml and secrets.yml
 from trading_bots.conf import settings
 from trading_bots.contrib.exchanges import buda, bitfinex, bitstamp, kraken
-from trading_bots.contrib.models import Market, Side, Money, TxStatus
+from trading_bots.contrib.models import Market, Side, Money, TxStatus, OrderStatus
 from trading_bots.contrib.converters.open_exchange_rates import OpenExchangeRates
 from trading_bots.utils import truncate_money
 
@@ -152,7 +152,7 @@ class BudaBot(Bot):
         order = self.buda.place_market_order(Side.BUY, amount)
         if order:
             self.log.info(f'Market order placed, waiting for traded state')
-            while order.status != TxStatus.OK:
+            while order.status != OrderStatus.CLOSED:
                 order = self.buda.fetch_order(order.id)
                 sleep(1)
             return True
