@@ -134,9 +134,9 @@ class BudaBot(Bot):
     def store_transaction(self, buy_price, quote_amount, base_amount):
         self.transactions.append({
             'date': datetime.today().strftime("%b %d %Y %H:%M:%S"),
-            'buy_price': buy_price,
-            'quote_amount': quote_amount,
-            'base_amount': base_amount,
+            'buy_price': float(buy_price.amount),
+            'quote_amount': float(quote_amount.amount),
+            'base_amount': float(base_amount.amount),
         })
         self.store.set(f'transactions_{self.market}'.lower(), self.transactions)
 
@@ -173,7 +173,7 @@ class BudaBot(Bot):
             return truncate_money(interval_investment)
         intervals_without_investing = self.intervals_without_investing(last_tx_date)
         self.log.info(f'Intervals without investing: {intervals_without_investing}')
-        return truncate_money(intervals_without_investing * interval_investment)
+        return truncate_money(int(intervals_without_investing) * interval_investment)
 
     def withdraw_to_own_wallet(self, reference_price):
         if self.minimum_withdrawal_amount.currency == self.market.quote:
