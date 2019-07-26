@@ -1,4 +1,14 @@
 # Your Bot's config values
-
-# key1: value1
-# key2: value2
+investment:
+  market: 'BTCCLP'  # Market this bot will be buying at buda.com
+  ref_exchange: 'Bitstamp'  # Exchange used for reference price
+  ref_market: 'BTCUSD' # Market used at reference exchange for price
+  interval_hours: 2  # Hour interval when the bot tries to buy
+  monthly_amount: 300000  # Monthly investment in quote amount
+  overprice_limit: 0.03  # Max overprice allowed in percentage where 0.03 means 3%
+currency_converter: 'OpenExchangeRates'  # Name of currency converter to use
+withdrawal:
+  enabled: False  # Enable or disable feature, boolean
+  address: '1soveryfakeaddressreplacemepleace'  # Address where funds will be withdrawn
+  min_amount: 30000  # Minimum amount to withdraw
+  amount_currency: 'CLP'  # Currency defined for amount calculations
