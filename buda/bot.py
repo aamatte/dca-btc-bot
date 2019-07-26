@@ -13,7 +13,6 @@ from datetime import datetime
 from time import sleep
 from decimal import Decimal
 
-
 class BudaBot(Bot):
     # The label is a unique identifier you assign to your bot on Trading-Bots
     label = 'buda'
@@ -36,6 +35,7 @@ class BudaBot(Bot):
         self.interval_hours = config['investment']['interval_hours']
         self.transactions = self.store.get(f'transactions_{self.market}'.lower()) or []
         self.amount_investment = self.calculate_amount_investment()
+        self.override_min_order_amount_btc()
         assert self.amount_investment > Money('1', self.market.quote), 'Amount investment too low'
         self.overprice_limit = config['investment']['overprice_limit']
         # Currency converter to use
@@ -106,6 +106,14 @@ class BudaBot(Bot):
                 f'https://free.currencyconverterapi.com/api/v6/convert?q={code}&compact=y&apiKey={api_key}'
             ).json()[code]['val']
             return truncate_money(Money(rate, self.market.quote))
+
+    def override_min_order_amount_btc(self):
+        buda.BudaTrading.min_order_amount_mapping = {
+            'BCH': Decimal('0.0001'),
+            'BTC': Decimal('0.00001'),
+            'ETH': Decimal('0.001'),
+            'LTC': Decimal('0.00001'),
+        }
 
     def get_amount_to_buy(self):
         quotation = self.buda.fetch_order_book().quote(Side.BUY, amount=self.amount_investment)
