@@ -53,6 +53,12 @@ pipenv shell
 python bots.py run buda
 ```
 
+That will run the bot in `dry_run` mode (it won't place any order). Once you are sure everything is correct, in `settings.yml` set:
+
+```
+dry_run: False
+```
+
 ### Prerequisites
 
 You need to have installed `python3.7` and `pipenv`.
@@ -60,6 +66,18 @@ You need to have installed `python3.7` and `pipenv`.
 ## Deployment
 
 You can run the bot every 2-5 minutes with a cron job.
+
+```
+crontab -e
+```
+
+At the end of the file put something like this:
+
+```
+*/2 * * * * cd ~/dca-btc-bot && /usr/local/bin/pipenv run ~/dca-btc-bot/bots.py run buda >> ~/dca-btc-bot/log.log 2>&1
+```
+
+That will run the bot every 2 minutes.
 
 ## Built With
 
