@@ -8,7 +8,7 @@ investment:
   overprice_limit: 0.03  # Max overprice allowed in percentage where 0.03 means 3%
 currency_converter: 'OpenExchangeRates'  # Name of currency converter to use
 withdrawal:
-  enabled: True  # Enable or disable feature, boolean
+  enabled: False  # Enable or disable feature, boolean
   address: '1soveryfakeaddressreplacemepleace'  # Address where funds will be withdrawn
   min_amount: 30000  # Minimum amount to withdraw
   amount_currency: 'CLP'  # Currency defined for amount calculations
