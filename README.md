@@ -15,11 +15,12 @@ Create a `secrets.yml` file.
 ```
 credentials:
   Buda:
-    key: YOUR-KEY-HERE
-    secret: YOUR-SECRET-HERE
-
-apis:
-  currencyconverter_key: YOUR currencyconverterapi.com API KEY
+    key: 'do not share your keys'
+    secret: 'do not share your keys'
+  Currencyconverter:
+    key: 'do not share your keys'
+  OpenExchangeRates:
+    app_id: 'do not share your keys'
 ```
 
 Adjust your settings in `settings.yml`. You have to edit:
@@ -28,14 +29,18 @@ Adjust your settings in `settings.yml`. You have to edit:
 ...
 
 investment:
-  # Every how many hours the bot tries to buy
-  interval_hours: 2 # Every 2 hours
-
-  # Monthly investment
-  monthly: 10000 # 10,000 CLP every month
-
-  # Max overprice
-  overprice_limit: 0.03 # 3% max overprice
+  market: 'BTCCLP'  # Market this bot will be buying at buda.com
+  ref_exchange: 'Bitstamp'  # Exchange used for reference price
+  ref_market: 'BTCUSD' # Market used at reference exchange for price
+  interval_hours: 2  # Hour interval when the bot tries to buy
+  monthly_amount: 300000  # Monthly investment in quote amount
+  overprice_limit: 0.03  # Max overprice allowed in percentage where 0.03 means 3%
+currency_converter: 'OpenExchangeRates'  # Name of currency converter to use
+withdrawal:
+  enabled: True  # Enable or disable feature, boolean
+  address: '1soveryfakeaddressreplacemepleace'  # Address where funds will be withdrawn
+  min_amount: 30000  # Minimum amount to withdraw
+  amount_currency: 'CLP'  # Currency defined for amount calculations
 
 ...
 ```
@@ -56,7 +61,7 @@ dry_run: False
 
 ### Prerequisites
 
-You need to have installed `python3.6` and `pipenv`.
+You need to have installed `python3.7` and `pipenv`.
 
 ## Deployment
 
