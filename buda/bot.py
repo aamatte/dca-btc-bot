@@ -4,7 +4,7 @@ from trading_bots.bots import Bot
 # The settings module contains all values from settings.yml and secrets.yml
 from trading_bots.conf import settings
 from trading_bots.contrib.exchanges import buda, bitfinex, bitstamp, kraken
-from trading_bots.contrib.models import Market, Side, Money, TxStatus
+from trading_bots.contrib.models import Market, Side, Money, TxStatus, OrderStatus
 from trading_bots.contrib.converters.open_exchange_rates import OpenExchangeRates
 from trading_bots.utils import truncate_money
 
@@ -12,7 +12,6 @@ import requests
 from datetime import datetime
 from time import sleep
 from decimal import Decimal
-
 
 class BudaBot(Bot):
     # The label is a unique identifier you assign to your bot on Trading-Bots
@@ -36,6 +35,7 @@ class BudaBot(Bot):
         self.interval_hours = config['investment']['interval_hours']
         self.transactions = self.store.get(f'transactions_{self.market}'.lower()) or []
         self.amount_investment = self.calculate_amount_investment()
+        self.override_min_order_amount_btc()
         assert self.amount_investment > Money('1', self.market.quote), 'Amount investment too low'
         self.overprice_limit = config['investment']['overprice_limit']
         # Currency converter to use
@@ -107,6 +107,14 @@ class BudaBot(Bot):
             ).json()[code]['val']
             return truncate_money(Money(rate, self.market.quote))
 
+    def override_min_order_amount_btc(self):
+        buda.BudaTrading.min_order_amount_mapping = {
+            'BCH': Decimal('0.0001'),
+            'BTC': Decimal('0.00001'),
+            'ETH': Decimal('0.001'),
+            'LTC': Decimal('0.00001'),
+        }
+
     def get_amount_to_buy(self):
         quotation = self.buda.fetch_order_book().quote(Side.BUY, amount=self.amount_investment)
         return truncate_money(quotation.base_amount)
@@ -126,9 +134,9 @@ class BudaBot(Bot):
     def store_transaction(self, buy_price, quote_amount, base_amount):
         self.transactions.append({
             'date': datetime.today().strftime("%b %d %Y %H:%M:%S"),
-            'buy_price': buy_price,
-            'quote_amount': quote_amount,
-            'base_amount': base_amount,
+            'buy_price': float(buy_price.amount),
+            'quote_amount': float(quote_amount.amount),
+            'base_amount': float(base_amount.amount),
         })
         self.store.set(f'transactions_{self.market}'.lower(), self.transactions)
 
@@ -144,7 +152,7 @@ class BudaBot(Bot):
         order = self.buda.place_market_order(Side.BUY, amount)
         if order:
             self.log.info(f'Market order placed, waiting for traded state')
-            while order.status != TxStatus.OK:
+            while order.status != OrderStatus.CLOSED:
                 order = self.buda.fetch_order(order.id)
                 sleep(1)
             return True
@@ -165,7 +173,7 @@ class BudaBot(Bot):
             return truncate_money(interval_investment)
         intervals_without_investing = self.intervals_without_investing(last_tx_date)
         self.log.info(f'Intervals without investing: {intervals_without_investing}')
-        return truncate_money(intervals_without_investing * interval_investment)
+        return truncate_money(int(intervals_without_investing) * interval_investment)
 
     def withdraw_to_own_wallet(self, reference_price):
         if self.minimum_withdrawal_amount.currency == self.market.quote:
