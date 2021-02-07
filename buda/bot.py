@@ -33,6 +33,7 @@ class BudaBot(Bot):
         # Initialize Algorithm configs
         self.daily_investment = Money(str(config['investment']['monthly_amount'] / 30), self.market.quote)
         self.interval_hours = Decimal(config['investment']['interval_hours'])
+        self.verify_month = config['investment']['verify_month']
         self.transactions = self.store.get(f'transactions_{self.market}'.lower()) or []
         self.amount_investment = self.calculate_amount_investment()
         self.override_min_order_amount_btc()
@@ -167,8 +168,11 @@ class BudaBot(Bot):
     def intervals_without_investing(self, last_transaction_date):
         if last_transaction_date is None:
             return 1
-        last_transaction_date_hour = last_transaction_date.replace(minute=0, second=0, microsecond=0)
-        diff_hours = ((datetime.now() - last_transaction_date_hour).total_seconds() // 60) / 60
+        last_transaction_date_hour = last_transaction_date.replace(microsecond=0)
+        current_time = datetime.now().replace(microsecond=0)
+        if self.verify_month and last_transaction_date.month != current_time.month:
+            return 1
+        diff_hours = ((current_time - last_transaction_date_hour).total_seconds() // 60) / 60
         return Decimal(diff_hours) // self.interval_hours
 
     def calculate_amount_investment(self):
