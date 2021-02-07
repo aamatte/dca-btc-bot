@@ -32,11 +32,14 @@ class BudaBot(Bot):
         self.reference = self.get_market_client(config['investment']['ref_exchange'], self.ref_market)
         # Initialize Algorithm configs
         self.daily_investment = Money(str(config['investment']['monthly_amount'] / 30), self.market.quote)
-        self.interval_hours = config['investment']['interval_hours']
+        self.interval_hours = Decimal(config['investment']['interval_hours'])
         self.transactions = self.store.get(f'transactions_{self.market}'.lower()) or []
         self.amount_investment = self.calculate_amount_investment()
         self.override_min_order_amount_btc()
-        assert self.amount_investment > Money('1', self.market.quote), 'Amount investment too low'
+        self.invest = True
+        if not self.amount_investment > Money('1', self.market.quote):
+            self.log.info('Amount investment too low')
+            self.invest = False
         self.overprice_limit = config['investment']['overprice_limit']
         # Currency converter to use
         self.converter = config['currency_converter']
@@ -48,6 +51,9 @@ class BudaBot(Bot):
         self.minimum_withdrawal_amount = Money(w_amount, config['withdrawal']['amount_currency'])
 
     def _algorithm(self):
+        if not self.invest:
+            self.log.info('Not investing')
+            return
         balance = self.buda.wallets.quote.fetch_balance().free
         international_price = self.reference.fetch_ticker().last
         buy_amount = self.get_amount_to_buy()
@@ -163,7 +169,7 @@ class BudaBot(Bot):
             return 1
         last_transaction_date_hour = last_transaction_date.replace(minute=0, second=0, microsecond=0)
         diff_hours = ((datetime.now() - last_transaction_date_hour).total_seconds() // 60) / 60
-        return diff_hours // self.interval_hours
+        return Decimal(diff_hours) // self.interval_hours
 
     def calculate_amount_investment(self):
         last_transaction = self.transactions[-1] if len(self.transactions) > 0 else None
