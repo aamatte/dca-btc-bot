@@ -172,7 +172,7 @@ class BudaBot(Bot):
         current_time = datetime.now().replace(microsecond=0)
         if self.verify_month and last_transaction_date.month != current_time.month:
             return 1
-        diff_hours = ((current_time - last_transaction_date_hour).total_seconds() // 60) / 60
+        diff_hours = ((current_time - last_transaction_date_hour).total_seconds() / 60) / 60
         return Decimal(diff_hours) // self.interval_hours
 
     def calculate_amount_investment(self):
