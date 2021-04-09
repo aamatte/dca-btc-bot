@@ -6,6 +6,7 @@ investment:
   interval_hours: 2  # Hour interval when the bot tries to buy
   monthly_amount: 300000  # Monthly investment in quote amount
   overprice_limit: 0.03  # Max overprice allowed in percentage where 0.03 means 3%
+  verify_month: False # Verify intervals only for current month
 currency_converter: 'OpenExchangeRates'  # Name of currency converter to use
 withdrawal:
   enabled: False  # Enable or disable feature, boolean
